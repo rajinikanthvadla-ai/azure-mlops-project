@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Churn Prediction</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #f5f7fb;
+        color: #1f2937;
+      }
+
+      main {
+        max-width: 760px;
+        margin: 40px auto;
+        padding: 32px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      }
+
+      h1 {
+        margin-top: 0;
+      }
+
+      form {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-weight: 600;
+      }
+
+      input,
+      select,
+      button {
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 16px;
+        padding: 10px 12px;
+      }
+
+      button {
+        grid-column: 1 / -1;
+        border: 0;
+        background: #2563eb;
+        color: white;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .result,
+      .error {
+        margin-top: 24px;
+        padding: 16px;
+        border-radius: 8px;
+      }
+
+      .result {
+        background: #ecfdf5;
+        border: 1px solid #86efac;
+      }
+
+      .error {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+      }
+
+      code {
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Customer Churn Prediction</h1>
+      <p>This UI calls the Azure ML online endpoint from the Flask backend, not from the browser.</p>
+
+      <form method="post">
+        <label>
+          Tenure
+          <input name="tenure" type="number" value="{{ values.tenure }}" required>
+        </label>
+
+        <label>
+          Monthly charges
+          <input name="monthly_charges" type="number" step="0.01" value="{{ values.monthly_charges }}" required>
+        </label>
+
+        <label>
+          Total charges
+          <input name="total_charges" type="number" step="0.01" value="{{ values.total_charges }}" required>
+        </label>
+
+        <label>
+          Contract months
+          <select name="contract_months">
+            <option value="1" {% if values.contract_months == 1 %}selected{% endif %}>Month to month</option>
+            <option value="12" {% if values.contract_months == 12 %}selected{% endif %}>One year</option>
+            <option value="24" {% if values.contract_months == 24 %}selected{% endif %}>Two years</option>
+          </select>
+        </label>
+
+        <label>
+          Support calls
+          <input name="support_calls" type="number" value="{{ values.support_calls }}" required>
+        </label>
+
+        <label>
+          Paperless billing
+          <select name="paperless_billing">
+            <option value="1" {% if values.paperless_billing == 1 %}selected{% endif %}>Yes</option>
+            <option value="0" {% if values.paperless_billing == 0 %}selected{% endif %}>No</option>
+          </select>
+        </label>
+
+        <button type="submit">Predict Churn</button>
+      </form>
+
+      {% if prediction %}
+      <section class="result">
+        <strong>Prediction result</strong>
+        <p>Label: {{ prediction.labels[0] }}</p>
+        <code>{{ prediction }}</code>
+      </section>
+      {% endif %}
+
+      {% if error %}
+      <section class="error">
+        <strong>Error</strong>
+        <p>{{ error }}</p>
+      </section>
+      {% endif %}
+    </main>
+  </body>
+</html>

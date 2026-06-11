@@ -1,0 +1,12 @@
+name: churn-ml-env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - azureml-mlflow
+      - joblib
+      - mlflow
+      - pandas
+      - scikit-learn

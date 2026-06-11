@@ -1,0 +1,59 @@
+name: 01 Train and Register Churn Model
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - data/**
+      - src/train.py
+      - ml/conda.yml
+      - ml/environment.yml
+      - ml/job.yml
+      - .github/workflows/01-train-register-model.yml
+
+permissions:
+  contents: read
+
+env:
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_ML_WORKSPACE: ${{ vars.AZURE_ML_WORKSPACE }}
+
+jobs:
+  train-register:
+    name: Train and register model
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install Azure ML CLI extension
+        run: |
+          az extension add --name ml --upgrade --yes
+
+      - name: Validate required variables
+        run: |
+          test -n "${AZURE_RESOURCE_GROUP}" || (echo "Missing repo variable AZURE_RESOURCE_GROUP" && exit 1)
+          test -n "${AZURE_ML_WORKSPACE}" || (echo "Missing repo variable AZURE_ML_WORKSPACE" && exit 1)
+
+      - name: Create or update Azure ML environment
+        run: |
+          az ml environment create \
+            --file ml/environment.yml \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --workspace-name "${AZURE_ML_WORKSPACE}"
+
+      - name: Submit training job and register model
+        run: |
+          az ml job create \
+            --file ml/job.yml \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --workspace-name "${AZURE_ML_WORKSPACE}" \
+            --stream
