@@ -462,8 +462,32 @@ Deployment Center: check deployment status
 
 ## Cleanup
 
-To delete all lab resources:
+To delete the deployed endpoint, Web App, App Service Plan, Azure ML compute, and Azure ML workspace while keeping only the empty resource group:
 
 ```bash
-az group delete --name rg-churn-mlops-lab --yes --no-wait
+bash scripts/cleanup.sh
+```
+
+To delete everything in the lab resource group:
+
+```bash
+DELETE_RESOURCE_GROUP=true bash scripts/cleanup.sh
+```
+
+The cleanup script uses these default values:
+
+```bash
+LOCATION="eastus"
+RESOURCE_GROUP="rg-churn-mlops-lab"
+WORKSPACE="mlw-churn-lab"
+COMPUTE="cpu-cluster"
+APP_PLAN="asp-churn-lab"
+WEBAPP="app-churn-ui-lab"
+AML_ENDPOINT_NAME="churn-endpoint"
+```
+
+Override any value before running the script if your names are different:
+
+```bash
+RESOURCE_GROUP="my-rg" WEBAPP="my-webapp" bash scripts/cleanup.sh
 ```
