@@ -57,8 +57,6 @@ def main() -> None:
         ]
     )
 
-    mlflow.sklearn.autolog(log_models=False)
-
     with mlflow.start_run():
         model.fit(x_train, y_train)
         predictions = model.predict(x_test)

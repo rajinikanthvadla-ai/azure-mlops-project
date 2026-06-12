@@ -7,6 +7,6 @@ dependencies:
   - pip:
       - azureml-mlflow
       - joblib
-      - mlflow
+      - mlflow<3
       - pandas
       - scikit-learn

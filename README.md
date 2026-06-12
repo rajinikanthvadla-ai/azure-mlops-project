@@ -341,6 +341,18 @@ AML_ENDPOINT_NAME   = churn-endpoint
 AML_DEPLOYMENT_NAME = blue
 ```
 
+Important: add these under the `Variables` tab, not the `Secrets` tab. The workflows read them using GitHub Actions `vars`.
+
+If a workflow fails with `Missing repo variable AZURE_RESOURCE_GROUP`, the variables are missing or were added in the wrong tab. Go back to:
+
+```text
+GitHub repository -> Settings -> Secrets and variables -> Actions -> Variables
+```
+
+Then add the variables above and rerun the failed workflow.
+
+If the training job fails during model registration with `/api/2.0/mlflow/logged-models failed with error code 404`, Azure ML is using an unsupported MLflow 3.x model logging API. This lab pins `mlflow<3` in `ml/conda.yml`; commit and push that change, then rerun `01 Train and Register Churn Model`.
+
 ## 4. Run GitHub Actions Pipelines
 
 Run these workflows in order:
