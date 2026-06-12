@@ -71,7 +71,7 @@ Use Azure ML Studio only to verify:
 
 Login and select subscription:
 
-```powershell
+```bash
 az login
 az account set --subscription "<SUBSCRIPTION_ID>"
 az extension add --name ml --upgrade --yes
@@ -79,60 +79,110 @@ az extension add --name ml --upgrade --yes
 
 Set lab values:
 
-```powershell
-$LOCATION = "eastus"
-$RESOURCE_GROUP = "rg-churn-mlops-lab"
-$WORKSPACE = "mlw-churn-lab"
-$COMPUTE = "cpu-cluster"
-$APP_PLAN = "asp-churn-lab"
-$WEBAPP = "app-churn-ui-lab"
+```bash
+LOCATION="eastus"
+RESOURCE_GROUP="rg-churn-mlops-lab"
+WORKSPACE="mlw-churn-lab"
+COMPUTE="cpu-cluster"
+APP_LOCATION="$LOCATION"
+APP_PLAN="asp-churn-lab"
+WEBAPP="app-churn-ui-lab"
 ```
 
 Create the resource group:
 
-```powershell
-az group create `
-  --name $RESOURCE_GROUP `
-  --location $LOCATION
+```bash
+az group create \
+  --name "$RESOURCE_GROUP" \
+  --location "$LOCATION"
 ```
 
 Create the Azure ML workspace:
 
-```powershell
-az ml workspace create `
-  --name $WORKSPACE `
-  --resource-group $RESOURCE_GROUP `
-  --location $LOCATION
+```bash
+az ml workspace create \
+  --name "$WORKSPACE" \
+  --resource-group "$RESOURCE_GROUP" \
+  --location "$LOCATION"
 ```
 
 Create Azure ML compute:
 
-```powershell
-az ml compute create `
-  --name $COMPUTE `
-  --resource-group $RESOURCE_GROUP `
-  --workspace-name $WORKSPACE `
-  --type amlcompute `
-  --min-instances 0 `
-  --max-instances 2 `
+```bash
+az ml compute create \
+  --name "$COMPUTE" \
+  --resource-group "$RESOURCE_GROUP" \
+  --workspace-name "$WORKSPACE" \
+  --type amlcompute \
+  --min-instances 0 \
+  --max-instances 2 \
+  --size Standard_DS3_v2
+```
+
+Optional single-node compute:
+
+Azure ML shows `amlcompute` under compute clusters, but you can make it behave like a single-node training machine by setting `--max-instances 1`.
+
+```bash
+az ml compute create \
+  --name "$COMPUTE" \
+  --resource-group "$RESOURCE_GROUP" \
+  --workspace-name "$WORKSPACE" \
+  --type amlcompute \
+  --min-instances 0 \
+  --max-instances 1 \
   --size Standard_DS3_v2
 ```
 
 Create App Service:
 
-```powershell
-az appservice plan create `
-  --name $APP_PLAN `
-  --resource-group $RESOURCE_GROUP `
-  --location $LOCATION `
-  --sku B1 `
+```bash
+az appservice plan create \
+  --name "$APP_PLAN" \
+  --resource-group "$RESOURCE_GROUP" \
+  --location "$APP_LOCATION" \
+  --sku B1 \
   --is-linux
 
-az webapp create `
-  --name $WEBAPP `
-  --resource-group $RESOURCE_GROUP `
-  --plan $APP_PLAN `
+az webapp create \
+  --name "$WEBAPP" \
+  --resource-group "$RESOURCE_GROUP" \
+  --plan "$APP_PLAN" \
   --runtime "PYTHON:3.11"
+```
+
+If App Service fails with quota or feature errors, keep the same resource group and try another App Service region. This loop tries common supported regions and stops when the plan is created:
+
+```bash
+for APP_LOCATION in eastus2 westeurope southeastasia westus2 southcentralus centralus northeurope southindia westindia; do
+  echo "Trying App Service region: $APP_LOCATION"
+
+  if az appservice plan create \
+    --name "$APP_PLAN" \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$APP_LOCATION" \
+    --sku B1 \
+    --is-linux; then
+    echo "App Service Plan created in: $APP_LOCATION"
+    break
+  fi
+done
+
+az webapp create \
+  --name "$WEBAPP" \
+  --resource-group "$RESOURCE_GROUP" \
+  --plan "$APP_PLAN" \
+  --runtime "PYTHON:3.11"
+```
+
+To list Linux `B1` App Service regions available from Azure CLI:
+
+```bash
+az appservice list-locations \
+  --sku B1 \
+  --linux-workers-enabled \
+  --query "[].name" \
+  -o table
 ```
 
 ### Azure Portal UI Navigation For Infrastructure
@@ -194,21 +244,65 @@ Runtime stack: Python 3.11
 Operating System: Linux
 App Service Plan: asp-churn-lab
 Pricing plan: B1
+Region: eastus, or another supported region if App Service quota/features fail
 ```
 
 ## 2. Create GitHub Azure Login Secret
 
+GitHub Actions needs permission to create Azure ML jobs, deploy the endpoint, read endpoint credentials, configure App Service settings, and deploy the Flask app. A service principal is an application identity for automation, so GitHub can deploy to Azure without using your personal login.
+
+Real-world use case:
+
+```text
+Developer pushes code -> GitHub Actions logs in as service principal -> pipeline deploys to Azure
+```
+
+This keeps deployments repeatable and avoids storing a user's Azure username/password in GitHub.
+
 Create a service principal for GitHub Actions:
 
-```powershell
-$SUBSCRIPTION_ID = az account show --query id -o tsv
+```bash
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
 
-az ad sp create-for-rbac `
-  --name "sp-github-churn-mlops-lab" `
-  --role contributor `
-  --scopes "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP" `
+MSYS_NO_PATHCONV=1 az ad sp create-for-rbac \
+  --name "sp-github-churn-mlops-lab" \
+  --role contributor \
+  --scopes "$SCOPE" \
   --json-auth
 ```
+
+`MSYS_NO_PATHCONV=1` is required when using Git Bash on Windows. Without it, Git Bash can rewrite `/subscriptions/...` into a local Windows path and Azure role assignment fails.
+
+Azure Portal UI navigation to create or review the service principal:
+
+```text
+Azure Portal -> Microsoft Entra ID -> App registrations -> New registration
+```
+
+Use:
+
+```text
+Name: sp-github-churn-mlops-lab
+Supported account types: Single tenant
+```
+
+Then create a client secret:
+
+```text
+App registration -> Certificates & secrets -> New client secret
+```
+
+Then assign permissions:
+
+```text
+Azure Portal -> Resource groups -> rg-churn-mlops-lab -> Access control (IAM) -> Add role assignment
+Role: Contributor
+Assign access to: User, group, or service principal
+Select: sp-github-churn-mlops-lab
+```
+
+The Azure CLI command above is easier because it creates the app registration, service principal, client secret, and role assignment in one step.
 
 Copy the full JSON output into this GitHub repository secret:
 
@@ -277,15 +371,15 @@ Azure ML Studio -> Endpoints -> Real-time endpoints
 
 Get endpoint details:
 
-```powershell
-az ml online-endpoint show `
-  --name churn-endpoint `
-  --resource-group rg-churn-mlops-lab `
+```bash
+az ml online-endpoint show \
+  --name churn-endpoint \
+  --resource-group rg-churn-mlops-lab \
   --workspace-name mlw-churn-lab
 
-az ml online-endpoint get-credentials `
-  --name churn-endpoint `
-  --resource-group rg-churn-mlops-lab `
+az ml online-endpoint get-credentials \
+  --name churn-endpoint \
+  --resource-group rg-churn-mlops-lab \
   --workspace-name mlw-churn-lab
 ```
 
@@ -358,6 +452,6 @@ Deployment Center: check deployment status
 
 To delete all lab resources:
 
-```powershell
+```bash
 az group delete --name rg-churn-mlops-lab --yes --no-wait
 ```
